@@ -1,5 +1,5 @@
 use std::fs::{File, OpenOptions};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Write, Error as IoError};
 use std::path::{Path, PathBuf};
 use clap::{Arg, ArgMatches, Command};
 use reqwest::Client;
@@ -8,6 +8,9 @@ use dotenv::dotenv;
 use log::{info, error, debug};
 use simplelog::{WriteLogger, LevelFilter, Config};
 use chrono::{DateTime, Local, TimeZone};
+
+use std::fs;
+
 
 pub async fn handle_ask_subcommand(matches: &ArgMatches) {
     dotenv().ok(); // Load environment variables from .env file
@@ -142,36 +145,88 @@ fn parse_system_prompt<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<Stri
     Ok(system_prompt)
 }
 
-fn parse_messages<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<Vec<(String, String)>, std::io::Error> {
+fn parse_messages<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<Vec<(String, String)>, IoError> {
     let mut messages = Vec::new();
     let mut current_role = String::new();
     let mut current_content = String::new();
 
     for line in lines {
         let line = line?;
-        if line.starts_with("user:") || line.starts_with("assistant:") {
-            if !current_role.is_empty() {
-                messages.push((current_role.clone(), current_content.trim().to_string()));
-                current_content.clear();
-            }
-            current_role = if line.starts_with("user:") { "user" } else { "assistant" }.to_string();
-            current_content = line.splitn(2, ':').nth(1).unwrap_or("").trim().to_string();
+        if is_new_message(&line) {
+            finish_current_message(&mut messages, &mut current_role, &mut current_content);
+            start_new_message(&line, &mut current_role, &mut current_content);
         } else if !line.is_empty() {
-            if (current_role == "user" && !line.starts_with("<c>")) ||
-               (current_role == "assistant" && !line.trim().starts_with("<!--") && !line.trim().ends_with("-->")) {
-                if !current_content.is_empty() {
-                    current_content.push_str("\n");
-                }
-                current_content.push_str(line.trim());
-            }
+            process_message_line(&line, &current_role, &mut current_content)?;
         }
     }
 
-    if !current_role.is_empty() {
-        messages.push((current_role, current_content.trim().to_string()));
-    }
-
+    finish_current_message(&mut messages, &mut current_role, &mut current_content);
     Ok(messages)
+}
+
+fn is_new_message(line: &str) -> bool {
+    line.starts_with("user:") || line.starts_with("assistant:")
+}
+
+fn finish_current_message(messages: &mut Vec<(String, String)>, role: &mut String, content: &mut String) {
+    if !role.is_empty() {
+        messages.push((role.clone(), content.trim().to_string()));
+        content.clear();
+    }
+}
+
+fn start_new_message(line: &str, role: &mut String, content: &mut String) {
+    *role = if line.starts_with("user:") { "user" } else { "assistant" }.to_string();
+    *content = line.splitn(2, ':').nth(1).unwrap_or("").trim().to_string();
+}
+
+fn process_message_line(line: &str, role: &str, content: &mut String) -> Result<(), IoError> {
+    match role {
+        "user" => process_user_line(line, content),
+        "assistant" => process_assistant_line(line, content),
+        _ => Ok(()),
+    }
+}
+
+fn process_user_line(line: &str, content: &mut String) -> Result<(), IoError> {
+    if is_file_reference(line) {
+        expand_file_reference(line, content)?;
+    } else if !line.starts_with("<c>") {
+        append_line(content, line);
+    }
+    Ok(())
+}
+
+fn process_assistant_line(line: &str, content: &mut String) -> Result<(), IoError> {
+    if !line.trim().starts_with("<!--") && !line.trim().ends_with("-->") {
+        append_line(content, line);
+    }
+    Ok(())
+}
+
+fn is_file_reference(line: &str) -> bool {
+    line.trim().starts_with("[[") && line.trim().ends_with("]]") && !line.contains('\n')
+}
+
+fn expand_file_reference(line: &str, content: &mut String) -> Result<(), IoError> {
+    let file_path = line.trim().trim_start_matches("[[").trim_end_matches("]]");
+    match fs::read_to_string(file_path) {
+        Ok(file_content) => {
+            content.push_str(&format!("\n\n[[{}]]\n\n{}\n\n", file_path, file_content));
+            Ok(())
+        },
+        Err(e) => {
+            content.push_str(&format!("\n\nFailed to read file: {}\n\n", file_path));
+            Err(e)
+        }
+    }
+}
+
+fn append_line(content: &mut String, line: &str) {
+    if !content.is_empty() {
+        content.push('\n');
+    }
+    content.push_str(line.trim());
 }
 
 fn prepare_api_messages(system_prompt: &str, messages: &[(String, String)]) -> Vec<Value> {
