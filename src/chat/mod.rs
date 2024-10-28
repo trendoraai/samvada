@@ -1,11 +1,12 @@
 pub mod create;
 pub mod lint;
+pub mod constants;
 
 use clap::ArgMatches;
 
 pub fn handle_chat_subcommand(matches: &ArgMatches) {
     match matches.subcommand() {
-        Some(("new", new_m)) => {
+        Some(("create", new_m)) => {
             create::handle_create_subcommand(new_m);
         }
         Some(("lint", lint_m)) => {

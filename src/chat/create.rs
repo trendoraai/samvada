@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use std::path::PathBuf;
 use chrono::Utc;
 use clap::{Arg, ArgMatches, Command};
-use crate::frontmatter::FRONTMATTER_TEMPLATE;
+use crate::chat::constants::FRONTMATTER_TEMPLATE;
 
 pub fn handle_create_subcommand(matches: &ArgMatches) {
     let name = matches.get_one::<String>("name").unwrap();
@@ -31,9 +31,12 @@ pub fn create_chat(name: &str, dir: Option<&str>) -> io::Result<()> {
 
     // Use the frontmatter template
     let frontmatter = FRONTMATTER_TEMPLATE
-        .replace("title: .*", &format!("title: {}", title))
-        .replace("created_at: .+", &format!("created_at: {}", created_at))
-        .replace("updated_at: .+", &format!("updated_at: {}", updated_at));
+        .replace("{title}", &title)
+        .replace("{system}", "") // Replace with actual system value
+        .replace("{created_at}", &created_at)
+        .replace("{updated_at}", &updated_at)
+        .replace("{tags}", "[]") // Replace with actual tags if needed
+        .replace("{summary}", ""); // Replace with actual summary if needed
 
     let mut file_path = PathBuf::from(dir.unwrap_or("."));
     file_path.push(format!("{}.md", name));

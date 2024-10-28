@@ -1,9 +1,8 @@
-pub mod frontmatter;
-
 use std::fs;
 use std::path::Path;
 use regex::Regex;
 use clap::{Arg, ArgMatches, Command};
+use crate::chat::constants::FRONTMATTER_TEMPLATE;
 
 pub fn handle_lint_subcommand(matches: &ArgMatches) {
     let path = matches.get_one::<String>("path").unwrap();
@@ -41,14 +40,23 @@ pub fn lint_chat(path: &str) -> Result<(), String> {
 
 fn lint_file(file_path: &Path) -> Result<(), String> {
     let content = fs::read_to_string(file_path).map_err(|e| e.to_string())?;
-    let re = Regex::new(frontmatter::FRONTMATTER_TEMPLATE).unwrap();
+    
+    // Extract keys from the FRONTMATTER_TEMPLATE
+    let key_pattern = Regex::new(r"\{(\w+)\}").unwrap();
+    let keys: Vec<String> = key_pattern.captures_iter(FRONTMATTER_TEMPLATE)
+        .map(|cap| cap[1].to_string())
+        .collect();
 
-    if re.is_match(&content) {
-        println!("{} is valid.", file_path.display());
-        Ok(())
-    } else {
-        Err(format!("{} is missing or has incorrect frontmatter", file_path.display()))
+    // Check if all keys are present in the content
+    for key in keys {
+        let key_regex = Regex::new(&format!(r"{}:\s*.+", key)).unwrap();
+        if !key_regex.is_match(&content) {
+            return Err(format!("{} is missing or has incorrect frontmatter", file_path.display()));
+        }
     }
+
+    println!("{} is valid.", file_path.display());
+    Ok(())
 }
 
 pub fn validate_path(path: &str) -> bool {
