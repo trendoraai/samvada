@@ -1,4 +1,5 @@
 use std::fs::{File, OpenOptions};
+use std::fs;
 use std::io::{BufRead, BufReader, Write, Error as IoError};
 use std::path::{Path, PathBuf};
 use clap::{Arg, ArgMatches, Command};
@@ -6,10 +7,14 @@ use reqwest::Client;
 use serde_json::{json, Value, to_string_pretty};
 use dotenv::dotenv;
 use log::{info, error, debug};
-use simplelog::{WriteLogger, LevelFilter, Config};
+use simplelog::{
+    ConfigBuilder, LevelFilter, WriteLogger, TermLogger, TerminalMode, CombinedLogger,
+    LevelPadding, ThreadLogMode,
+};
+use simplelog::*;
 use chrono::{DateTime, Local, TimeZone};
-
-use std::fs;
+use time::macros::format_description;
+use time::UtcOffset;
 
 
 pub async fn handle_ask_subcommand(matches: &ArgMatches) {
@@ -43,7 +48,6 @@ pub async fn handle_ask_subcommand(matches: &ArgMatches) {
     }
 }
 
-
 fn append_answer_to_file(file_path: &str, answer: &str, response_body: &Value) -> std::io::Result<()> {
     let mut file = OpenOptions::new()
         .write(true)
@@ -58,7 +62,7 @@ fn append_answer_to_file(file_path: &str, answer: &str, response_body: &Value) -
     let created_datetime: DateTime<Local> = Local.timestamp_opt(created, 0)
         .single()
         .unwrap_or_else(|| Local::now());
-    let created_formatted = created_datetime.format("%Y-%m-%d %H:%M:%S").to_string();
+    let created_formatted = created_datetime.format("%Y-%m-%d %H:%M:%S %:z").to_string(); // Include timezone
     
     let id = response_body["id"].as_str().unwrap_or_default();
     let model = response_body["model"].as_str().unwrap_or_default();
@@ -75,17 +79,52 @@ fn append_answer_to_file(file_path: &str, answer: &str, response_body: &Value) -
     Ok(())
 }
 
+
 fn setup_logging(file_path: &str) -> PathBuf {
     let path = Path::new(file_path);
     let stem = path.file_stem().unwrap_or_default();
     let parent = path.parent().unwrap_or_else(|| Path::new(""));
     let log_path = parent.join(format!("{}.log", stem.to_str().unwrap()));
 
-    WriteLogger::init(
-        LevelFilter::Debug,
-        Config::default(),
-        File::create(&log_path).expect("Failed to create log file"),
-    ).expect("Failed to initialize logger");
+    // Get the local time offset using chrono
+    let offset_in_sec = Local::now().offset().local_minus_utc();
+    eprintln!("Detected local offset: {} seconds", offset_in_sec);
+
+    // Convert chrono offset to time::UtcOffset
+    let local_offset = UtcOffset::from_whole_seconds(offset_in_sec)
+        .unwrap_or_else(|_| {
+            eprintln!("Invalid offset: {}. Defaulting to UTC", offset_in_sec);
+            UtcOffset::UTC
+        });
+
+    eprintln!("Using UTC offset: {:?}", local_offset);
+
+    // Customize the logging configuration
+    let config = ConfigBuilder::new()
+        .set_thread_mode(ThreadLogMode::Both)
+        .set_level_padding(LevelPadding::Right)
+        .set_time_format_custom(format_description!(
+            "[year]-[month]-[day] [hour]:[minute]:[second].[subsecond digits:3] [offset_hour sign:mandatory]:[offset_minute]"
+        ))
+        .set_time_offset(local_offset)
+        .build();
+
+    // Initialize both WriteLogger and TermLogger
+    CombinedLogger::init(
+        vec![
+            WriteLogger::new(
+                LevelFilter::Debug,
+                config.clone(),
+                File::create(&log_path).expect("Failed to create log file"),
+            ),
+            TermLogger::new(
+                LevelFilter::Info,
+                config,
+                TerminalMode::Mixed,
+                ColorChoice::Auto,
+            ),
+        ]
+    ).expect("Failed to initialize loggers");
 
     log_path
 }
