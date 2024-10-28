@@ -130,31 +130,33 @@ fn setup_logging(file_path: &str) -> PathBuf {
 }
 
 async fn process_file_and_query_openai(file_path: &str, api_key: &str) -> Result<(String, Value), Box<dyn std::error::Error>> {
-    let (system_prompt, messages) = parse_file(file_path)?;
+    let (system_prompt, model, messages) = parse_file(file_path)?;
     let api_messages = prepare_api_messages(&system_prompt, &messages);
     
     debug!("Prepared API messages:\n{}", to_string_pretty(&api_messages)?);
     
-    query_openai(api_key, api_messages).await
+    query_openai(api_key, &model, api_messages).await
 }
 
-fn parse_file(file_path: &str) -> Result<(String, Vec<(String, String)>), std::io::Error> {
+fn parse_file(file_path: &str) -> Result<(String, String, Vec<(String, String)>), std::io::Error> {
     info!("Parsing file: {}", file_path);
     let file = File::open(file_path)?;
     let reader = BufReader::new(file);
     let mut lines = reader.lines();
 
-    let system_prompt = parse_system_prompt(&mut lines)?;
+    let (system_prompt, model) = parse_frontmatter(&mut lines)?;
     let messages = parse_messages(&mut lines)?;
 
     debug!("Parsed system prompt: {}", system_prompt);
+    debug!("Using model: {}", model);
     debug!("Parsed {} messages", messages.len());
 
-    Ok((system_prompt, messages))
+    Ok((system_prompt, model, messages))
 }
 
-fn parse_system_prompt<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<String, std::io::Error> {
+fn parse_frontmatter<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<(String, String), std::io::Error> {
     let mut system_prompt = String::new();
+    let mut model = String::from("gpt-3.5-turbo"); // default model
     let mut in_frontmatter = false;
     let mut reading_system = false;
 
@@ -172,6 +174,9 @@ fn parse_system_prompt<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<Stri
             if line.starts_with("system:") {
                 reading_system = true;
                 system_prompt = line.trim_start_matches("system:").trim().to_string();
+            } else if line.starts_with("model:") {
+                model = line.trim_start_matches("model:").trim().to_string();
+                reading_system = false;
             } else if reading_system && !line.contains(':') {
                 system_prompt.push_str("\n");
                 system_prompt.push_str(line.trim());
@@ -181,7 +186,7 @@ fn parse_system_prompt<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<Stri
         }
     }
 
-    Ok(system_prompt)
+    Ok((system_prompt, model))
 }
 
 fn parse_messages<B: BufRead>(lines: &mut std::io::Lines<B>) -> Result<Vec<(String, String)>, IoError> {
@@ -281,19 +286,19 @@ fn prepare_api_messages(system_prompt: &str, messages: &[(String, String)]) -> V
     api_messages
 }
 
-async fn query_openai(api_key: &str, messages: Vec<Value>) -> Result<(String, Value), Box<dyn std::error::Error>> {
+async fn query_openai(api_key: &str, model: &str, messages: Vec<Value>) -> Result<(String, Value), Box<dyn std::error::Error>> {
     let client = Client::new();
     
-    info!("Sending request to OpenAI API");
+    info!("Sending request to OpenAI API using model: {}", model);
     debug!("Request payload:\n{}", to_string_pretty(&json!({
-        "model": "gpt-3.5-turbo",
+        "model": model,
         "messages": messages
     }))?);
 
     let response = client.post("https://api.openai.com/v1/chat/completions")
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&json!({
-            "model": "gpt-3.5-turbo",
+            "model": model,
             "messages": messages
         }))
         .send()
