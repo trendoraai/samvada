@@ -4,7 +4,8 @@ mod chat;
 
 use clap::{ArgMatches, Command};
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let matches = parse_arguments();
 
     match matches.subcommand() {
@@ -15,7 +16,7 @@ fn main() {
             goodbye::handle_goodbye_subcommand(sub_m);
         }
         Some(("chat", sub_m)) => {
-            chat::handle_chat_subcommand(sub_m);
+            chat::handle_chat_subcommand(sub_m).await;
         }
         _ => println!("No valid subcommand was used"),
     }

@@ -6,4 +6,10 @@ edition = "2021"
 [dependencies]
 chrono = "0.4.38"
 clap = { version = "4.5.20", features = ["derive"] }
+dotenv = "0.15.0"
+log = "0.4.22"
 regex = "1.11.1"
+reqwest = { version = "0.12.8", features = ["json"] }
+serde_json = "1.0.132"
+simplelog = "0.12.2"
+tokio = { version = "1.41.0", features = ["full"] }
