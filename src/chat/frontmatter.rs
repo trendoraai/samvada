@@ -1,0 +1,1 @@
+pub const FRONTMATTER_TEMPLATE: &str = r"(?m)^---\ntitle: .*\nsystem: .*\ncreated_at: .+\nupdated_at: .+\ntags: \[.*\]\nsummary: .*\n---";
