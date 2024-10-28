@@ -2,6 +2,8 @@ mod greeting;
 mod goodbye;
 
 use clap::{Arg, ArgMatches, Command};
+use regex::Regex;
+use std::process;
 
 fn main() {
     let matches = parse_arguments();
@@ -18,8 +20,16 @@ fn main() {
             let names = get_names(sub_m);
             let caps = sub_m.get_flag("caps");
             let surname = sub_m.get_one::<String>("surname").map(String::as_str);
+            let date_after = sub_m.get_one::<String>("date-after").map(String::as_str);
 
-            goodbye::generate_goodbyes(names, caps, surname);
+            if let Some(date) = date_after {
+                if !validate_date_format(date) {
+                    eprintln!("Error: Date must be in yyyy-mm-dd format.");
+                    process::exit(1);
+                }
+            }
+
+            goodbye::generate_goodbyes(names, caps, surname, date_after);
         }
         _ => println!("No valid subcommand was used"),
     }
@@ -68,6 +78,12 @@ fn parse_arguments() -> ArgMatches {
                         .long("surname")
                         .num_args(1)
                         .help("Append the surname to each name"),
+                )
+                .arg(
+                    Arg::new("date-after")
+                        .long("date-after")
+                        .num_args(1)
+                        .help("Specify a date in yyyy-mm-dd format"),
                 ),
         )
         .get_matches()
@@ -79,4 +95,9 @@ fn get_names(matches: &ArgMatches) -> Vec<&str> {
         .unwrap_or_default()
         .map(|s| s.as_str())
         .collect()
+}
+
+fn validate_date_format(date: &str) -> bool {
+    let re = Regex::new(r"^\d{4}-\d{2}-\d{2}$").unwrap();
+    re.is_match(date)
 }
