@@ -4,19 +4,20 @@
       {
         "label": "Chat Current File",
         "type": "shell",
+        "isBackground": true,
         "command": "samvada chat lint ${file} && samvada chat ask ${file} || echo Linting failed",
         "problemMatcher": []
       },
       {
-        "label": "Echo Selected Text",
+        "label": "Quick Chat",
         "type": "shell",
-        "command": "echo",
-        "args": ["${selectedText}"],
+        "isBackground": true,
+        "command": "echo '${selectedText}' | xargs -0 samvada chat quick | tee /dev/tty | pbcopy",
         "presentation": {
           "echo": true,
           "reveal": "always",
           "focus": false,
-          "panel": "new"
+          "panel": "shared"
         },
         "problemMatcher": []
       }
