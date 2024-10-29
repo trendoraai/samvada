@@ -1,16 +1,17 @@
+use atty::Stream;
 use chrono::Local;
 use clap::{Arg, ArgMatches, Command};
 use log::{error, info};
 use serde_json::Value;
 use std::fs::OpenOptions;
-use std::io::Write;
+use std::io::{self, Read, Write};
 
 use crate::chat::api::query_openai;
 use crate::chat::config::load_config;
 use crate::chat::config::{get_api_key, get_env_file_path, save_api_key};
+use crate::chat::create::create_chat;
 use crate::chat::logging::setup_logging;
 use crate::chat::parser::prepare_api_messages;
-use crate::chat::create::create_chat;
 
 /// Handles the quick subcommand by saving API key, loading environment variables, processing the question, and querying OpenAI.
 pub async fn handle_quick_subcommand(matches: &ArgMatches) {
@@ -47,10 +48,29 @@ pub async fn handle_quick_subcommand(matches: &ArgMatches) {
 
     let api_key = get_api_key(matches.get_one::<String>("api-key"));
 
-    let question = matches.get_one::<String>("question").unwrap();
+    // Read question from argument or stdin
+    let question = if let Some(question_arg) = matches.get_one::<String>("question") {
+        question_arg.clone()
+    } else if !atty::is(Stream::Stdin) {
+        // Read from stdin if stdin is not connected to a terminal (i.e., input is being piped)
+        let mut stdin_input = String::new();
+        io::stdin()
+            .read_to_string(&mut stdin_input)
+            .expect("Failed to read from stdin");
+        stdin_input.trim().to_string()
+    } else {
+        eprintln!("No question provided. Please provide a question as an argument or via stdin.");
+        std::process::exit(1);
+    };
+
+    // Ensure that the question is not empty
+    if question.is_empty() {
+        eprintln!("No question provided. Please provide a question as an argument or via stdin.");
+        std::process::exit(1);
+    }
 
     match process_question_and_query_openai(
-        question,
+        &question,
         &api_key,
         &system_prompt,
         &model,
@@ -64,7 +84,7 @@ pub async fn handle_quick_subcommand(matches: &ArgMatches) {
 
             // Handle logging and saving if required
             if matches.get_flag("save-to-markdown") {
-                if let Err(e) = save_conversation_to_markdown(question, &answer, &response_body) {
+                if let Err(e) = save_conversation_to_markdown(&question, &answer, &response_body) {
                     error!("Failed to save conversation to markdown: {}", e);
                     eprintln!("Failed to save conversation to markdown: {}", e);
                 } else {
@@ -102,16 +122,16 @@ fn save_conversation_to_markdown(
 ) -> std::io::Result<()> {
     let timestamp = Local::now();
     let file_name = format!("conversation_{}", timestamp.format("%Y%m%d_%H%M%S"));
-    
+
     // First create the file with proper frontmatter using create_chat
     create_chat(&file_name, None)?;
-    
+
     // Now append the conversation
     let current_dir = std::env::current_dir()?;
     let file_path = current_dir.join(format!("{}.md", file_name));
-    
+
     let mut file = OpenOptions::new()
-        .append(true)  // Changed from write(true) to append(true)
+        .append(true)
         .open(&file_path)?;
 
     // Append conversation
@@ -139,7 +159,7 @@ pub fn quick_command() -> Command {
         .arg(
             Arg::new("question")
                 .help("The question to ask")
-                .required(true)
+                .required(false) // Make it optional
                 .num_args(1),
         )
         .arg(
