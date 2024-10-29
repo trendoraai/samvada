@@ -1,5 +1,6 @@
 /target
 /chats
 /temp
+.vscode/settings.json
 .timer
 .env
