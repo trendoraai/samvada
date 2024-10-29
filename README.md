@@ -19,6 +19,12 @@ Samvada is a powerful command-line tool for managing AI-assisted conversations u
 - Rust (latest stable version)
 - OpenAI API key
 
+### Installing Globally from Crates.io
+
+```bash
+cargo install samvada
+```
+
 ### Building from Source
 
 ```bash
@@ -29,9 +35,10 @@ cargo build --release
 
 ## Configuration
 
-Create a `.env` file in your project root:
+Create a `.env` file in your project root or within ~/.samvada/:
 
-```
+```bash
+touch ~/.samvada/.env
 OPENAI_API_KEY=your_api_key_here
 ```
 
@@ -62,6 +69,11 @@ samvada chat lint ./chats
 ```bash
 # Start or continue a chat
 samvada chat ask my_chat.md
+```
+
+Pass api key as an option (this will create a `.env` file in ~/.samvada/ to store the api key):
+```bash
+samvada chat ask my_chat.md --api-key your_api_key_here
 ```
 
 ## Chat File Format
@@ -106,15 +118,3 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the [MIT License](LICENSE).
-
----
-
-This improved README file:
-
-1. Uses emojis to make the features section more visually appealing.
-2. Organizes the usage examples into clear sections with proper formatting.
-3. Adds a note about the file reference format for clarity.
-4. Includes a contributing section to encourage community involvement.
-5. Adds a license section (you should replace [MIT License] with your actual license).
-6. Improves overall formatting and readability.
-7. Uses more concise language while maintaining all important information.
