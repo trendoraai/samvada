@@ -6,6 +6,8 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Error as IoError, Read, Write};
 use std::path::PathBuf;
 
+use crate::chat::constants::ADD_OPENAI_KEY_MESSAGE;
+
 // Replace the const string with include_str!
 const DEFAULT_CONFIG: &str = include_str!("../config.yml");
 
@@ -125,13 +127,5 @@ pub fn get_api_key(cli_key: Option<&String>) -> String {
                 key
             })
         })
-        .expect(
-            "OpenAI API key not found! Please set it using one of these methods:\n\
-            1. Run the command with your API key using --api-key=your-api-key-here\n\
-            2. Set it in your .env file\n\
-            3. Set it as an environment variable:\n\
-               - Windows (Command Prompt): set OPENAI_API_KEY=your-api-key-here\n\
-               - Windows (PowerShell): $env:OPENAI_API_KEY='your-api-key-here'\n\
-               - Mac/Linux: export OPENAI_API_KEY=your-api-key-here",
-        )
+        .expect(ADD_OPENAI_KEY_MESSAGE)
 }
