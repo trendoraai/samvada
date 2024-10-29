@@ -20,8 +20,6 @@ pub async fn query_openai(
         }))?
     );
 
-    debug!("API key: {}", api_key);
-
     let response = client
         .post(api_endpoint)
         .header("Authorization", format!("Bearer {}", api_key))
@@ -32,7 +30,17 @@ pub async fn query_openai(
         .send()
         .await?;
 
-    let response_body: Value = response.json().await?;
+    let status = response.status();
+    let response_text = response.text().await?;
+
+    if !status.is_success() {
+        return Err(format!(
+            "OpenAI API error (status {}): {}",
+            status, response_text
+        ).into());
+    }
+
+    let response_body: Value = serde_json::from_str(&response_text)?;
 
     debug!("Received response:\n{}", to_string_pretty(&response_body)?);
 

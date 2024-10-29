@@ -1,4 +1,4 @@
-use chrono::{DateTime, Local, TimeZone};
+use chrono::Local;
 use clap::{Arg, ArgMatches, Command};
 use log::{error, info};
 use serde_json::Value;
@@ -10,6 +10,7 @@ use crate::chat::config::load_config;
 use crate::chat::config::{get_api_key, get_env_file_path, save_api_key};
 use crate::chat::logging::setup_logging;
 use crate::chat::parser::prepare_api_messages;
+use crate::chat::create::create_chat;
 
 /// Handles the quick subcommand by saving API key, loading environment variables, processing the question, and querying OpenAI.
 pub async fn handle_quick_subcommand(matches: &ArgMatches) {
@@ -99,43 +100,34 @@ fn save_conversation_to_markdown(
     answer: &str,
     response_body: &Value,
 ) -> std::io::Result<()> {
-    let timestamp = Local::now().format("%Y%m%d_%H%M%S");
-    let file_name = format!("conversation_{}.md", timestamp);
+    let timestamp = Local::now();
+    let file_name = format!("conversation_{}", timestamp.format("%Y%m%d_%H%M%S"));
+    
+    // First create the file with proper frontmatter using create_chat
+    create_chat(&file_name, None)?;
+    
+    // Now append the conversation
+    let current_dir = std::env::current_dir()?;
+    let file_path = current_dir.join(format!("{}.md", file_name));
+    
     let mut file = OpenOptions::new()
-        .write(true)
-        .create(true)
-        .open(&file_name)?;
+        .append(true)  // Changed from write(true) to append(true)
+        .open(&file_path)?;
 
-    writeln!(file, "---")?;
-    writeln!(file, "system: You are a helpful assistant.")?;
-    writeln!(
-        file,
-        "model: {}\n---\n",
-        response_body["model"].as_str().unwrap_or("gpt-3.5-turbo")
-    )?;
-
-    writeln!(file, "user:\n{}\n", question)?;
+    // Append conversation
+    writeln!(file, "\nuser:\n{}\n", question)?;
     writeln!(file, "assistant:\n{}\n", answer)?;
 
-    // Extract and format the required information
-    let created = response_body["created"].as_i64().unwrap_or_default();
-    let created_datetime: DateTime<Local> = Local
-        .timestamp_opt(created, 0)
-        .single()
-        .unwrap_or_else(|| Local::now());
-    let created_formatted = created_datetime.format("%Y-%m-%d %H:%M:%S %:z").to_string();
-
+    // Add metadata as comments
     let id = response_body["id"].as_str().unwrap_or_default();
-    let model = response_body["model"].as_str().unwrap_or_default();
     let total_tokens = response_body["usage"]["total_tokens"]
         .as_i64()
         .unwrap_or_default();
 
-    // Write the formatted comments
-    writeln!(file, "<!-- model_name: {} -->", model)?;
     writeln!(file, "<!-- id: {} -->", id)?;
-    writeln!(file, "<!-- created: {} -->", created_formatted)?;
     writeln!(file, "<!-- total_tokens: {} -->", total_tokens)?;
+
+    println!("\nSaving conversation to: {}", file_path.display());
 
     Ok(())
 }
