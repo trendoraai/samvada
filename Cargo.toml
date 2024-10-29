@@ -10,6 +10,7 @@ readme = "README.md"
 [dependencies]
 chrono = "0.4.31"
 clap = { version = "4.4.11", features = ["derive"] }
+dirs = "5.0.1"
 dotenv = "0.15.0"
 log = "0.4.20"
 regex = "1.10.2"

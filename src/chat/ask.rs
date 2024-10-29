@@ -1,6 +1,6 @@
 use chrono::{DateTime, Local, TimeZone};
 use clap::{Arg, ArgMatches, Command};
-use dotenv::dotenv;
+use dirs::home_dir;
 use log::{debug, error, info};
 use reqwest::Client;
 use serde_json::{json, to_string_pretty, Value};
@@ -14,11 +14,59 @@ use std::path::{Path, PathBuf};
 use time::macros::format_description;
 use time::UtcOffset;
 
+fn get_config_dir() -> std::io::Result<PathBuf> {
+    let home = home_dir().ok_or_else(|| {
+        IoError::new(
+            std::io::ErrorKind::NotFound,
+            "Could not find home directory",
+        )
+    })?;
+    let config_dir = home.join(".samvada");
+    fs::create_dir_all(&config_dir)?;
+    Ok(config_dir)
+}
+
+fn get_env_file_path() -> std::io::Result<PathBuf> {
+    Ok(get_config_dir()?.join(".env"))
+}
+
+fn save_api_key(api_key: &str) -> std::io::Result<()> {
+    let env_path = get_env_file_path()?;
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .open(env_path)?;
+
+    writeln!(file, "OPENAI_API_KEY={}", api_key)?;
+    println!("API key saved successfully in ~/.samvada/.env!");
+    Ok(())
+}
+
 pub async fn handle_ask_subcommand(matches: &ArgMatches) {
-    dotenv().ok(); // Load environment variables from .env file
+    // If API key is provided as argument, save it
+    if let Some(api_key) = matches.get_one::<String>("api-key") {
+        if let Err(e) = save_api_key(api_key) {
+            eprintln!("Failed to save API key: {}", e);
+            std::process::exit(1);
+        }
+    }
+
+    // Load environment variables from the config directory
+    if let Ok(env_path) = get_env_file_path() {
+        dotenv::from_path(env_path).ok();
+    }
 
     let file_path = matches.get_one::<String>("file").unwrap();
-    let api_key = std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY not set");
+    let api_key = std::env::var("OPENAI_API_KEY").expect(
+        "OpenAI API key not found! Please set it using one of these methods:\n\
+        1. Run the command with your API key:\n\
+           samvada ask --api-key=your-api-key-here file.md\n\
+        2. Set it as an environment variable:\n\
+           - Windows (Command Prompt): set OPENAI_API_KEY=your-api-key-here\n\
+           - Windows (PowerShell): $env:OPENAI_API_KEY='your-api-key-here'\n\
+           - Mac/Linux: export OPENAI_API_KEY=your-api-key-here",
+    );
 
     // Setup logging
     let _log_path = setup_logging(file_path);
@@ -64,7 +112,7 @@ fn append_answer_to_file(
         .timestamp_opt(created, 0)
         .single()
         .unwrap_or_else(|| Local::now());
-    let created_formatted = created_datetime.format("%Y-%m-%d %H:%M:%S %:z").to_string(); // Include timezone
+    let created_formatted = created_datetime.format("%Y-%m-%d %H:%M:%S %:z").to_string();
 
     let id = response_body["id"].as_str().unwrap_or_default();
     let model = response_body["model"].as_str().unwrap_or_default();
@@ -89,10 +137,8 @@ fn setup_logging(file_path: &str) -> PathBuf {
     let parent = path.parent().unwrap_or_else(|| Path::new(""));
     let log_path = parent.join(format!("{}.log", stem.to_str().unwrap()));
 
-    // Get the local time offset using chrono
     let offset_in_sec = Local::now().offset().local_minus_utc();
 
-    // Convert chrono offset to time::UtcOffset
     let local_offset = UtcOffset::from_whole_seconds(offset_in_sec).unwrap_or_else(|_| {
         eprintln!("Invalid offset: {}. Defaulting to UTC", offset_in_sec);
         UtcOffset::UTC
@@ -100,7 +146,6 @@ fn setup_logging(file_path: &str) -> PathBuf {
 
     debug!("Using UTC offset: {:?}", local_offset);
 
-    // Customize the logging configuration
     let config = ConfigBuilder::new()
         .set_thread_mode(ThreadLogMode::Both)
         .set_level_padding(LevelPadding::Right)
@@ -110,7 +155,6 @@ fn setup_logging(file_path: &str) -> PathBuf {
         .set_time_offset(local_offset)
         .build();
 
-    // Initialize only WriteLogger (removed TermLogger)
     CombinedLogger::init(vec![WriteLogger::new(
         LevelFilter::Debug,
         config,
@@ -342,6 +386,13 @@ pub fn ask_command() -> Command {
             Arg::new("file")
                 .help("Path to the chat file")
                 .required(true)
+                .num_args(1),
+        )
+        .arg(
+            Arg::new("api-key")
+                .long("api-key")
+                .help("Set your OpenAI API key (will be saved for future use)")
+                .required(false)
                 .num_args(1),
         )
 }
