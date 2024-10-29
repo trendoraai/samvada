@@ -1,14 +1,12 @@
-use chrono::{DateTime, Local, TimeZone};
 use clap::{Arg, ArgMatches, Command};
 use log::{debug, error, info};
 use serde_json::Value;
-use std::fs::OpenOptions;
-use std::io::Write;
 
 use crate::chat::api::query_openai;
 use crate::chat::config::{get_api_key, get_env_file_path, save_api_key};
 use crate::chat::logging::setup_logging;
 use crate::chat::parser::{parse_file, prepare_api_messages};
+use crate::chat::_utils::handle_openai_response;
 
 /// Handles the 'ask' subcommand, processing the file and querying OpenAI
 pub async fn handle_ask_subcommand(matches: &ArgMatches) {
@@ -29,7 +27,7 @@ pub async fn handle_ask_subcommand(matches: &ArgMatches) {
     // Load environment variables from the config directory
     if let Ok(env_path) = get_env_file_path() {
         let absolute_path = env_path.canonicalize().unwrap_or_else(|_| env_path.clone());
-        println!(
+        debug!(
             "Loading environment from absolute path: {}",
             absolute_path.display()
         );
@@ -81,37 +79,7 @@ fn append_answer_to_file(
     answer: &str,
     response_body: &Value,
 ) -> std::io::Result<()> {
-    let mut file = OpenOptions::new()
-        .write(true)
-        .append(true)
-        .open(file_path)?;
-
-    writeln!(file, "\n\nassistant:")?;
-    writeln!(file, "{}\n", answer)?;
-
-    // Extract and format the required information
-    let created = response_body["created"].as_i64().unwrap_or_default();
-    let created_datetime: DateTime<Local> = Local
-        .timestamp_opt(created, 0)
-        .single()
-        .unwrap_or_else(|| Local::now());
-    let created_formatted = created_datetime.format("%Y-%m-%d %H:%M:%S %:z").to_string();
-
-    let id = response_body["id"].as_str().unwrap_or_default();
-    let model = response_body["model"].as_str().unwrap_or_default();
-    let total_tokens = response_body["usage"]["total_tokens"]
-        .as_i64()
-        .unwrap_or_default();
-
-    // Write the formatted comments
-    writeln!(file, "<!-- model_name: {} -->", model)?;
-    writeln!(file, "<!-- id: {} -->", id)?;
-    writeln!(file, "<!-- created: {} -->", created_formatted)?;
-    writeln!(file, "<!-- total_tokens: {} -->", total_tokens)?;
-
-    writeln!(file, "\n\nuser:")?;
-
-    Ok(())
+    handle_openai_response(file_path, None, answer, response_body)
 }
 
 /// Creates and returns the 'ask' command with its arguments

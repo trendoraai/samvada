@@ -3,8 +3,7 @@ use chrono::Local;
 use clap::{Arg, ArgMatches, Command};
 use log::{error, info};
 use serde_json::Value;
-use std::fs::OpenOptions;
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
 use crate::chat::api::query_openai;
 use crate::chat::config::load_config;
@@ -12,6 +11,7 @@ use crate::chat::config::{get_api_key, get_env_file_path, save_api_key};
 use crate::chat::create::create_chat;
 use crate::chat::logging::setup_logging;
 use crate::chat::parser::prepare_api_messages;
+use crate::chat::_utils::handle_openai_response;
 
 /// Handles the quick subcommand by saving API key, loading environment variables, processing the question, and querying OpenAI.
 pub async fn handle_quick_subcommand(matches: &ArgMatches) {
@@ -129,24 +129,16 @@ fn save_conversation_to_markdown(
     // Now append the conversation
     let current_dir = std::env::current_dir()?;
     let file_path = current_dir.join(format!("{}.md", file_name));
+    
+    // Convert PathBuf to &str
+    let file_path_str = file_path.to_str().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            "File path contains invalid Unicode",
+        )
+    })?;
 
-    let mut file = OpenOptions::new()
-        .append(true)
-        .open(&file_path)?;
-
-    // Append conversation
-    writeln!(file, "\nuser:\n{}\n", question)?;
-    writeln!(file, "assistant:\n{}\n", answer)?;
-
-    // Add metadata as comments
-    let id = response_body["id"].as_str().unwrap_or_default();
-    let total_tokens = response_body["usage"]["total_tokens"]
-        .as_i64()
-        .unwrap_or_default();
-
-    writeln!(file, "<!-- id: {} -->", id)?;
-    writeln!(file, "<!-- total_tokens: {} -->", total_tokens)?;
-
+    handle_openai_response(file_path_str, Some(question), answer, response_body)?;
     println!("\nSaving conversation to: {}", file_path.display());
 
     Ok(())

@@ -9,6 +9,7 @@ mod api;
 mod config;
 mod logging;
 mod parser;
+mod _utils;
 
 use clap::ArgMatches;
 

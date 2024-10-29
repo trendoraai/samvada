@@ -2,6 +2,14 @@
 
 Samvada is a powerful command-line tool for managing AI-assisted conversations using markdown files. It offers a structured approach to create, validate, and interact with AI chat sessions while maintaining a clean, version-controllable format.
 
+## Map samvada to m
+
+Go to your `.bashrc` or `.zshrc` and add the following line (then source the file):
+
+```bash
+alias m='samvada'
+```
+
 ## Features
 
 - 📝 Create new chat files with proper frontmatter
