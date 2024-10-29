@@ -3,8 +3,8 @@ name = "samvada"
 version = "0.1.0"
 edition = "2021"
 description = "Chat with AI assistant in markdown file"
-license = "Apache-2.0"
-repository = "https://github.com/yourusername/samvada"
+license = "MIT"
+repository = "https://github.com/trendoraai/samvada"
 readme = "README.md"
 
 [dependencies]

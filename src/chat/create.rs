@@ -1,9 +1,9 @@
+use crate::chat::constants::FRONTMATTER_TEMPLATE;
+use chrono::Utc;
+use clap::{Arg, ArgMatches, Command};
 use std::fs::File;
 use std::io::{self, Write};
 use std::path::PathBuf;
-use chrono::Utc;
-use clap::{Arg, ArgMatches, Command};
-use crate::chat::constants::FRONTMATTER_TEMPLATE;
 
 pub fn handle_create_subcommand(matches: &ArgMatches) {
     let name = matches.get_one::<String>("name").unwrap();

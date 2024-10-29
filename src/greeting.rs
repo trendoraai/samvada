@@ -38,11 +38,7 @@ fn get_names(matches: &ArgMatches) -> Vec<&str> {
 pub fn greeting_command() -> Command {
     Command::new("greeting")
         .about("Greet someone")
-        .arg(
-            Arg::new("names")
-                .help("Names to greet")
-                .num_args(1..),
-        )
+        .arg(Arg::new("names").help("Names to greet").num_args(1..))
         .arg(
             Arg::new("caps")
                 .long("caps")

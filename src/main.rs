@@ -1,6 +1,6 @@
-mod greeting;
-mod goodbye;
 mod chat;
+mod goodbye;
+mod greeting;
 
 use clap::{ArgMatches, Command};
 

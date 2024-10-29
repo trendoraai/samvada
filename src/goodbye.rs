@@ -16,7 +16,12 @@ pub fn handle_goodbye_subcommand(matches: &ArgMatches) {
     generate_goodbyes(names, caps, surname, date_after);
 }
 
-pub fn generate_goodbyes(names: Vec<&str>, caps: bool, surname: Option<&str>, date_after: Option<&str>) {
+pub fn generate_goodbyes(
+    names: Vec<&str>,
+    caps: bool,
+    surname: Option<&str>,
+    date_after: Option<&str>,
+) {
     if !names.is_empty() {
         for name in names {
             let full_name = match surname {

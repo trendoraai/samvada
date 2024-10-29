@@ -1,12 +1,14 @@
+use crate::chat::constants::FRONTMATTER_TEMPLATE;
+use clap::{Arg, ArgMatches, Command};
+use regex::Regex;
 use std::fs;
 use std::path::{Path, PathBuf};
-use regex::Regex;
-use clap::{Arg, ArgMatches, Command};
-use crate::chat::constants::FRONTMATTER_TEMPLATE;
 
 /// Handles the lint subcommand based on provided CLI arguments.
 pub fn handle_lint_subcommand(matches: &ArgMatches) {
-    let path = matches.get_one::<String>("path").expect("Path argument is required.");
+    let path = matches
+        .get_one::<String>("path")
+        .expect("Path argument is required.");
 
     if !is_valid_path(path) {
         eprintln!("Error: Invalid path.");
@@ -45,8 +47,7 @@ fn validate_chat_file(file_path: &Path) -> Result<(), String> {
     let content = fs::read_to_string(file_path)
         .map_err(|e| format!("Failed to read {}: {}", file_path.display(), e))?;
 
-    validate_frontmatter(&content)
-        .map_err(|e| format!("{}: {}", file_path.display(), e))?;
+    validate_frontmatter(&content).map_err(|e| format!("{}: {}", file_path.display(), e))?;
 
     validate_chat_structure(&content, file_path)?;
 
@@ -56,9 +57,10 @@ fn validate_chat_file(file_path: &Path) -> Result<(), String> {
 
 /// Validates the frontmatter of the chat content.
 fn validate_frontmatter(content: &str) -> Result<(), String> {
-    let key_pattern = Regex::new(r"\{(\w+)\}")
-        .map_err(|e| format!("Regex compilation error: {}", e))?;
-    let keys: Vec<String> = key_pattern.captures_iter(FRONTMATTER_TEMPLATE)
+    let key_pattern =
+        Regex::new(r"\{(\w+)\}").map_err(|e| format!("Regex compilation error: {}", e))?;
+    let keys: Vec<String> = key_pattern
+        .captures_iter(FRONTMATTER_TEMPLATE)
         .map(|cap| cap[1].to_string())
         .collect();
 
@@ -78,7 +80,8 @@ fn validate_frontmatter(content: &str) -> Result<(), String> {
 
 /// Validates the structure of the chat content.
 fn validate_chat_structure(content: &str, file_path: &Path) -> Result<(), String> {
-    let frontmatter_end = content.rfind("---")
+    let frontmatter_end = content
+        .rfind("---")
         .ok_or("Missing frontmatter end delimiter '---'.")?;
     let chat_content = &content[frontmatter_end + 3..];
 
@@ -87,11 +90,17 @@ fn validate_chat_structure(content: &str, file_path: &Path) -> Result<(), String
     }
 
     if !is_first_entry_user(chat_content) {
-        return Err("Chat structure error: First entry after frontmatter must start with 'user:'.".to_string());
+        return Err(
+            "Chat structure error: First entry after frontmatter must start with 'user:'."
+                .to_string(),
+        );
     }
 
     if !validate_alternating_entries(chat_content) {
-        return Err("Chat structure error: Entries must alternate between 'user:' and 'assistant:'.".to_string());
+        return Err(
+            "Chat structure error: Entries must alternate between 'user:' and 'assistant:'."
+                .to_string(),
+        );
     }
 
     if !is_last_entry_user(chat_content) {
@@ -109,10 +118,9 @@ fn validate_chat_structure(content: &str, file_path: &Path) -> Result<(), String
 /// Validates file references within the chat content.
 /// Returns `false` if any referenced file does not exist, logging the error.
 fn validate_file_references(content: &str, current_file_path: &Path) -> bool {
-    let user_pattern = Regex::new(r"(?m)^user:")
-        .expect("Failed to compile user entry regex.");
-    let file_pattern = Regex::new(r"\[\[([^\]\n]+)\]\]")
-        .expect("Failed to compile file reference regex.");
+    let user_pattern = Regex::new(r"(?m)^user:").expect("Failed to compile user entry regex.");
+    let file_pattern =
+        Regex::new(r"\[\[([^\]\n]+)\]\]").expect("Failed to compile file reference regex.");
 
     let user_messages: Vec<&str> = user_pattern.split(content).skip(1).collect();
     let mut all_valid = true;
@@ -135,19 +143,22 @@ fn validate_file_references(content: &str, current_file_path: &Path) -> bool {
 
 /// Resolves the full path of a referenced file based on the current file's path.
 fn resolve_referenced_path(file_path: &str, current_file_path: &Path) -> PathBuf {
-    let sanitized_path = file_path.replace(r"\ ", " ");  // Handle escaped spaces
+    let sanitized_path = file_path.replace(r"\ ", " "); // Handle escaped spaces
     let path = Path::new(&sanitized_path);
 
     if path.is_absolute() {
         path.to_path_buf()
     } else {
-        current_file_path.parent().map_or(path.to_path_buf(), |parent| parent.join(path))
+        current_file_path
+            .parent()
+            .map_or(path.to_path_buf(), |parent| parent.join(path))
     }
 }
 
 /// Checks if the first non-empty entry starts with 'user:'.
 fn is_first_entry_user(content: &str) -> bool {
-    let first_non_empty_line = content.lines()
+    let first_non_empty_line = content
+        .lines()
         .map(|line| line.trim())
         .find(|line| !line.is_empty());
 
@@ -190,7 +201,9 @@ fn validate_alternating_entries(content: &str) -> bool {
 
 /// Checks if the last non-empty entry starts with 'user:'.
 fn is_last_entry_user(content: &str) -> bool {
-    content.trim_end().lines()
+    content
+        .trim_end()
+        .lines()
         .rev()
         .map(|line| line.trim())
         .find(|line| !line.is_empty())
