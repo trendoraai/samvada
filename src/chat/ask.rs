@@ -8,10 +8,8 @@ use serde_json::{json, Value, to_string_pretty};
 use dotenv::dotenv;
 use log::{info, error, debug};
 use simplelog::{
-    ConfigBuilder, LevelFilter, WriteLogger, TermLogger, TerminalMode, CombinedLogger,
-    LevelPadding, ThreadLogMode,
+    ConfigBuilder, LevelFilter, WriteLogger, LevelPadding, ThreadLogMode, CombinedLogger
 };
-use simplelog::*;
 use chrono::{DateTime, Local, TimeZone};
 use time::macros::format_description;
 use time::UtcOffset;
@@ -55,7 +53,7 @@ fn append_answer_to_file(file_path: &str, answer: &str, response_body: &Value) -
         .open(file_path)?;
 
     writeln!(file, "\n\nassistant:")?;
-    writeln!(file, "{}\n\n", answer)?;
+    writeln!(file, "{}\n", answer)?;
     
     // Extract and format the required information
     let created = response_body["created"].as_i64().unwrap_or_default();
@@ -88,7 +86,6 @@ fn setup_logging(file_path: &str) -> PathBuf {
 
     // Get the local time offset using chrono
     let offset_in_sec = Local::now().offset().local_minus_utc();
-    eprintln!("Detected local offset: {} seconds", offset_in_sec);
 
     // Convert chrono offset to time::UtcOffset
     let local_offset = UtcOffset::from_whole_seconds(offset_in_sec)
@@ -97,7 +94,7 @@ fn setup_logging(file_path: &str) -> PathBuf {
             UtcOffset::UTC
         });
 
-    eprintln!("Using UTC offset: {:?}", local_offset);
+    debug!("Using UTC offset: {:?}", local_offset);
 
     // Customize the logging configuration
     let config = ConfigBuilder::new()
@@ -109,19 +106,13 @@ fn setup_logging(file_path: &str) -> PathBuf {
         .set_time_offset(local_offset)
         .build();
 
-    // Initialize both WriteLogger and TermLogger
+    // Initialize only WriteLogger (removed TermLogger)
     CombinedLogger::init(
         vec![
             WriteLogger::new(
                 LevelFilter::Debug,
-                config.clone(),
-                File::create(&log_path).expect("Failed to create log file"),
-            ),
-            TermLogger::new(
-                LevelFilter::Info,
                 config,
-                TerminalMode::Mixed,
-                ColorChoice::Auto,
+                File::create(&log_path).expect("Failed to create log file"),
             ),
         ]
     ).expect("Failed to initialize loggers");

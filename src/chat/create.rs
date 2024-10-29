@@ -33,6 +33,7 @@ pub fn create_chat(name: &str, dir: Option<&str>) -> io::Result<()> {
     let frontmatter = FRONTMATTER_TEMPLATE
         .replace("{title}", &title)
         .replace("{system}", "") // Replace with actual system value
+        .replace("{model}", "gpt-4o")
         .replace("{created_at}", &created_at)
         .replace("{updated_at}", &updated_at)
         .replace("{tags}", "[]") // Replace with actual tags if needed
