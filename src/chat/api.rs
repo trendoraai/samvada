@@ -1,11 +1,12 @@
 use log::{debug, info};
-use serde_json::{json, to_string_pretty, Value};
 use reqwest::Client;
+use serde_json::{json, to_string_pretty, Value};
 
 /// Queries the OpenAI API with the provided API key, model, and messages, returning the answer and response.
 pub async fn query_openai(
     api_key: &str,
     model: &str,
+    api_endpoint: &str,
     messages: Vec<Value>,
 ) -> Result<(String, Value), Box<dyn std::error::Error>> {
     let client = Client::new();
@@ -19,8 +20,10 @@ pub async fn query_openai(
         }))?
     );
 
+    debug!("API key: {}", api_key);
+
     let response = client
-        .post("https://api.openai.com/v1/chat/completions")
+        .post(api_endpoint)
         .header("Authorization", format!("Bearer {}", api_key))
         .json(&json!({
             "model": model,

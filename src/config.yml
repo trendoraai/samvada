@@ -1,0 +1,3 @@
+system_prompt: "Speak like a pirate."
+model: "gpt-3.5-turbo"
+api_endpoint: "https://api.openai.com/v1/chat/completions"

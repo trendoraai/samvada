@@ -1,17 +1,36 @@
+use chrono::{DateTime, Local, TimeZone};
 use clap::{Arg, ArgMatches, Command};
 use log::{error, info};
 use serde_json::Value;
-use chrono::{DateTime, Local, TimeZone};
 use std::fs::OpenOptions;
 use std::io::Write;
 
 use crate::chat::api::query_openai;
-use crate::chat::config::{get_env_file_path, save_api_key};
+use crate::chat::config::load_config;
+use crate::chat::config::{get_api_key, get_env_file_path, save_api_key};
 use crate::chat::logging::setup_logging;
 use crate::chat::parser::prepare_api_messages;
 
 /// Handles the quick subcommand by saving API key, loading environment variables, processing the question, and querying OpenAI.
 pub async fn handle_quick_subcommand(matches: &ArgMatches) {
+    // Setup logging FIRST (similar to ask.rs)
+    let _log_path = setup_logging(None);
+    info!("Starting processing for quick question");
+
+    // Load configurations from the YAML file
+    let app_config = match load_config() {
+        Ok(cfg) => cfg,
+        Err(e) => {
+            eprintln!("Error loading config: {}", e);
+            std::process::exit(1);
+        }
+    };
+
+    // Use the loaded configurations
+    let system_prompt = app_config.system_prompt;
+    let model = app_config.model;
+    let api_endpoint = app_config.api_endpoint;
+
     // If API key is provided as argument, save it
     if let Some(api_key) = matches.get_one::<String>("api-key") {
         if let Err(e) = save_api_key(api_key) {
@@ -25,24 +44,21 @@ pub async fn handle_quick_subcommand(matches: &ArgMatches) {
         dotenv::from_path(env_path).ok();
     }
 
+    let api_key = get_api_key(matches.get_one::<String>("api-key"));
+
     let question = matches.get_one::<String>("question").unwrap();
-    let api_key = std::env::var("OPENAI_API_KEY").expect(
-        "OpenAI API key not found! Please set it using one of these methods:\n\
-        1. Run the command with your API key:\n\
-           samvada chat quick \"Your question here\" --api-key=your-api-key-here\n\
-        2. Set it as an environment variable:\n\
-           - Windows (Command Prompt): set OPENAI_API_KEY=your-api-key-here\n\
-           - Windows (PowerShell): $env:OPENAI_API_KEY='your-api-key-here'\n\
-           - Mac/Linux: export OPENAI_API_KEY=your-api-key-here",
-    );
 
-    // Setup logging
-    let _log_path = setup_logging(None); // No file_path, logs to default location
-    info!("Starting processing for quick question");
-
-    match process_question_and_query_openai(question, &api_key).await {
+    match process_question_and_query_openai(
+        question,
+        &api_key,
+        &system_prompt,
+        &model,
+        &api_endpoint,
+    )
+    .await
+    {
         Ok((answer, response_body)) => {
-            println!("Answer:\n{}", answer);
+            println!("\n{}\n", answer);
             info!("Successfully processed question and received answer");
 
             // Handle logging and saving if required
@@ -67,13 +83,14 @@ pub async fn handle_quick_subcommand(matches: &ArgMatches) {
 async fn process_question_and_query_openai(
     question: &str,
     api_key: &str,
+    system_prompt: &str,
+    model: &str,
+    api_endpoint: &str,
 ) -> Result<(String, Value), Box<dyn std::error::Error>> {
-    let system_prompt = String::from("You are a helpful assistant."); // Default system prompt
-    let model = String::from("gpt-3.5-turbo"); // Default model
     let messages = vec![("user".to_string(), question.to_string())];
-    let api_messages = prepare_api_messages(&system_prompt, &messages);
+    let api_messages = prepare_api_messages(system_prompt, &messages);
 
-    query_openai(api_key, &model, api_messages).await
+    query_openai(api_key, model, api_endpoint, api_messages).await
 }
 
 /// Saves the conversation between user and assistant to a markdown file with necessary metadata.
@@ -91,7 +108,11 @@ fn save_conversation_to_markdown(
 
     writeln!(file, "---")?;
     writeln!(file, "system: You are a helpful assistant.")?;
-    writeln!(file, "model: {}\n---\n", response_body["model"].as_str().unwrap_or("gpt-3.5-turbo"))?;
+    writeln!(
+        file,
+        "model: {}\n---\n",
+        response_body["model"].as_str().unwrap_or("gpt-3.5-turbo")
+    )?;
 
     writeln!(file, "user:\n{}\n", question)?;
     writeln!(file, "assistant:\n{}\n", answer)?;

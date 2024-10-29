@@ -1,3 +1,4 @@
+use chrono::Local;
 use log::debug;
 use simplelog::{
     CombinedLogger, ConfigBuilder, LevelFilter, LevelPadding, ThreadLogMode, WriteLogger,
@@ -6,7 +7,6 @@ use std::fs::File;
 use std::path::{Path, PathBuf};
 use time::macros::format_description;
 use time::UtcOffset;
-use chrono::Local;
 
 /// Sets up logging configuration based on the provided file path or defaults to "samvada.log".
 pub fn setup_logging(file_path: Option<&str>) -> PathBuf {
